@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rebote Colorido</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #121212;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100vh;
+        }
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 36px;
+            text-align: center;
+            display: none;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 20px 2px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Puntos: 0</div>
+    <div id="gameOver">
+        <h1>¡Juego Terminado!</h1>
+        <p>Tu puntuación: <span id="finalScore">0</span></p>
+        <button id="restartButton">Jugar de Nuevo</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // Inicialización del canvas y contexto
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+
+        // Ajustar tamaño del canvas
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Variables del juego
+        let score = 0;
+        let gameActive = true;
+        let lastTime = 0;
+        let speedIncrease = 1;
+
+        // Plataforma
+        const platform = {
+            width: 150,
+            height: 15,
+            y: canvas.height - 30,
+            x: canvas.width / 2 - 75,
+            color: '#4CAF50'
+        };
+
+        // Pelota
+        const ball = {
+            radius: 15,
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            speedX: 5,
+            speedY: -7,
+            color: '#FFFFFF',
+            colorIndex: 0,
+            colors: ['#FF5252', '#FF4081', '#E040FB', '#7C4DFF', '#536DFE', '#448AFF', '#40C4FF', '#18FFFF', '#64FFDA', '#69F0AE']
+        };
+
+        // Manejar eventos de mouse/touch
+        function handleMouseMove(e) {
+            const relativeX = e.clientX - canvas.offsetLeft;
+            if (relativeX > 0 && relativeX < canvas.width) {
+                platform.x = relativeX - platform.width / 2;
+            }
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            const relativeX = e.touches[0].clientX - canvas.offsetLeft;
+            if (relativeX > 0 && relativeX < canvas.width) {
+                platform.x = relativeX - platform.width / 2;
+            }
+        }
+
+        // Cambiar color de la pelota
+        function changeColor() {
+            ball.colorIndex = (ball.colorIndex + 1) % ball.colors.length;
+            ball.color = ball.colors[ball.colorIndex];
+        }
+
+        // Dibujar elementos
+        function drawPlatform() {
+            ctx.beginPath();
+            ctx.rect(platform.x, platform.y, platform.width, platform.height);
+            ctx.fillStyle = platform.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = ball.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        // Actualizar posición de la pelota
+        function updateBall(deltaTime) {
+            ball.x += ball.speedX * (deltaTime / 16) * speedIncrease;
+            ball.y += ball.speedY * (deltaTime / 16) * speedIncrease;
+
+            // Colisión con bordes laterales
+            if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) {
+                ball.speedX = -ball.speedX;
+                changeColor();
+            }
+
+            // Colisión con borde superior
+            if (ball.y - ball.radius < 0) {
+                ball.speedY = -ball.speedY;
+                changeColor();
+            }
+
+            // Colisión con plataforma
+            if (ball.y + ball.radius > platform.y && 
+                ball.x > platform.x && 
+                ball.x < platform.x + platform.width) {
+                
+                // Calcular ángulo basado en donde golpeó la plataforma
+                const hitPosition = (ball.x - platform.x) / platform.width;
+                const angle = (hitPosition - 0.5) * Math.PI; // -PI/2 a PI/2
+                
+                // Ajustar dirección basada en el ángulo
+                const speed = Math.sqrt(ball.speedX * ball.speedX + ball.speedY * ball.speedY);
+                ball.speedX = Math.sin(angle) * speed;
+                ball.speedY = -Math.abs(Math.cos(angle) * speed);
+                
+                // Aumentar puntuación y velocidad
+                score++;
+                speedIncrease += 0.05;
+                scoreElement.textContent = `Puntos: ${score}`;
+                changeColor();
+                
+                // Efecto visual - flash en la plataforma
+                platform.color = ball.color;
+                setTimeout(() => {
+                    platform.color = '#4CAF50';
+                }, 200);
+            }
+
+            // Juego terminado si la pelota cae
+            if (ball.y + ball.radius > canvas.height) {
+                gameActive = false;
+                finalScoreElement.textContent = score;
+                gameOverElement.style.display = 'block';
+            }
+        }
+
+        // Limpiar canvas
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Bucle principal del juego
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            if (gameActive) {
+                clearCanvas();
+                drawPlatform();
+                drawBall();
+                updateBall(deltaTime);
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Reiniciar juego
+        function restartGame() {
+            score = 0;
+            speedIncrease = 1;
+            scoreElement.textContent = `Puntos: 0`;
+            gameOverElement.style.display = 'none';
+            
+            // Reiniciar posición de la pelota
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.speedX = 5;
+            ball.speedY = -7;
+            ball.color = '#FFFFFF';
+            
+            // Reiniciar plataforma
+            platform.x = canvas.width / 2 - platform.width / 2;
+            platform.color = '#4CAF50';
+            
+            gameActive = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event listeners
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            platform.y = canvas.height - 30;
+        });
+        restartButton.addEventListener('click', restartGame);
+
+        // Iniciar juego
+        restartGame();
+    </script>
+</body>
+</html>
